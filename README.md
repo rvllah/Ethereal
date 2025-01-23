@@ -1,5 +1,3 @@
-Basic AI webhook spammer, will be faster soon i swear.
-Made by rellahh___ On Discord dm for help
+Showcase
 
-join for support discord.gg/bXfpJYge3f( Ethereal discord)
-check other for the py version which is open src
+https://youtu.be/B-2DH2h7NDk

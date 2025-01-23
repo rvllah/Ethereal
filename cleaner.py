@@ -3,30 +3,43 @@ import sys
 import json
 import os
 import platform
-import discord
-from discord.ext import commands
-from tqdm import tqdm  # for colored progress bars
+import importlib.util
 
 # File to store bot tokens
 TOKEN_FILE = "tokens.json"
 
 def clear_screen():
     """Clear the terminal screen for better visual appeal."""
-    os.system("cls" if platform.system() == "Windows" else "clear")
+    os.system("cls" if os.name == "nt" else "clear")
 
 def install_packages():
-    """Check if required packages are installed. If not, install them."""
-    required_packages = ['discord.py', 'tqdm']
+    """Check if required packages are installed. If not, prompt the user to install them."""
+    required_packages = ['discord', 'tqdm']
     
     for package in required_packages:
-        try:
-            # Try importing the package. If it is installed, no action is taken.
-            __import__(package.split('==')[0])
+        if importlib.util.find_spec(package) is None:
+            print(f"{package} is not installed.")
+            choice = input(f"Do you want to install {package}? (yes/no): ").strip().lower()
+            if choice in ['yes', 'y']:
+                try:
+                    subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
+                    print(f"{package} installed successfully.")
+                except Exception as e:
+                    print(f"Failed to install {package}: {e}")
+                    sys.exit(1)
+            else:
+                print(f"Skipping installation of {package}. The program cannot proceed without it.")
+                sys.exit(1)
+        else:
             print(f"{package} is already installed.")
-        except ImportError:
-            print(f"{package} not found. Installing...")
-            subprocess.check_call([sys.executable, '-m', 'pip', 'install', package])
-            print(f"{package} installed successfully.")
+
+# Install required packages before proceeding
+install_packages()
+
+# Import modules after ensuring they are installed
+import discord
+from discord.ext import commands
+from tqdm import tqdm  # for colored progress bars
 
 def load_data(file):
     """Load data from a JSON file, or return an empty dictionary if the file does not exist or is corrupt."""
@@ -175,7 +188,7 @@ def server_cleanup():
     client.run(token)
 
 if __name__ == "__main__":
-    # Check if the packages are installed before continuing
+    # Ensure required packages are installed before proceeding
     install_packages()
     
     # Proceed to the main menu after ensuring the packages are installed

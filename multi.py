@@ -3,7 +3,6 @@ import sys
 import os
 import platform
 import json
-import shutil
 import asyncio
 from tqdm import tqdm
 
@@ -45,11 +44,12 @@ ASCII_ART = r"""
           \/           \/     \/            \/     \/      
 """
 
+# Utility functions
 def clear_screen():
     os.system("cls" if platform.system() == "Windows" else "clear")
 
-# Utility functions for JSON operations
 def load_data(file):
+    """Load JSON data from a file or return an empty dictionary if the file is missing or corrupt."""
     try:
         with open(file, "r") as f:
             return json.load(f)
@@ -57,32 +57,21 @@ def load_data(file):
         return {}
 
 def save_data(file, data):
+    """Save JSON data to a file."""
     try:
         with open(file, "w") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
         print(f"Error saving {file}: {e}")
 
-# Display options in a grid format
-def display_grid(items, title="Features"):
-    print(f"\n{title}:")
-    term_width = shutil.get_terminal_size().columns
-    max_length = max(len(item) for item in items) + 4
-    columns = max(1, term_width // max_length)
-
-    for i in range(0, len(items), columns):
-        row = items[i:i + columns]
-        print("".join(f"{item:<{max_length}}" for item in row))
-    print()
-
 async def create_roles(bot, guild_id):
-    """Create starter roles in the specified guild."""
+    """Create starter roles in a guild."""
     guild = bot.get_guild(int(guild_id))
     if not guild:
         print(f"Error: Bot is not in the specified guild (ID: {guild_id}).")
         return
 
-    role_data = {
+    roles = {
         "Owner": discord.Permissions(administrator=True),
         "Admin": discord.Permissions(administrator=True),
         "Moderator": discord.Permissions(manage_messages=True, kick_members=True),
@@ -90,83 +79,130 @@ async def create_roles(bot, guild_id):
     }
 
     try:
-        for role_name, permissions in role_data.items():
-            existing_role = discord.utils.get(guild.roles, name=role_name)
-            if existing_role:
-                print(f"Role {role_name} already exists, skipping.")
+        for role_name, permissions in roles.items():
+            if discord.utils.get(guild.roles, name=role_name):
+                print(f"Role {role_name} already exists.")
                 continue
-
-            await guild.create_role(
-                name=role_name,
-                permissions=permissions,
-                reason="Setting up starter roles."
-            )
-            print(f"Created role: {role_name}")
-    except discord.Forbidden:
-        print("Error: Bot lacks the required permissions to create roles.")
+            await guild.create_role(name=role_name, permissions=permissions)
+            print(f"Role {role_name} created.")
     except Exception as e:
         print(f"Error creating roles: {e}")
 
+async def create_channels(bot, guild_id):
+    """Create starter channels in a guild."""
+    guild = bot.get_guild(int(guild_id))
+    if not guild:
+        print(f"Error: Bot is not in the specified guild (ID: {guild_id}).")
+        return
+
+    categories = {
+        "Important": ["rules", "announcements", "roles"],
+        "Main": ["chat", "media", "bot-cmds"],
+        "Staff": ["staff-chat", "logs", "cmds"],
+    }
+
+    try:
+        for category_name, channel_names in categories.items():
+            category = discord.utils.get(guild.categories, name=category_name)
+            if not category:
+                category = await guild.create_category(category_name)
+
+            for channel_name in channel_names:
+                if discord.utils.get(category.channels, name=channel_name):
+                    print(f"Channel {channel_name} already exists.")
+                    continue
+                await guild.create_text_channel(channel_name, category=category)
+                print(f"Channel {channel_name} created in {category_name}.")
+    except Exception as e:
+        print(f"Error creating channels: {e}")
+
 async def menu():
-    """Display the menu and handle user choices."""
+    """Main menu to interact with the bot."""
     while True:
         clear_screen()
         print(ASCII_ART)
-        print("Welcome to the Discord Bot Setup Tool!\n")
-        options = [
-            "Save Bot Token",
-            "Load Bot Token",
-            "Create Starter Roles",
-            "Exit"
-        ]
+        print("Welcome to the Discord Bot Setup Tool!")
 
-        display_grid(options, "Main Menu")
-        choice = input("Enter your choice number> ").strip()
+        print("\nOptions:")
+        print("1. Save Bot Token")
+        print("2. Load Bot Tokens")
+        print("3. Create Starter Roles")
+        print("4. Create Starter Channels")
+        print("5. Exit")
+        choice = input("\nEnter your choice: ").strip()
 
         if choice == "1":
-            token_name = input("Enter a name for this token: ").strip()
-            token = input("Enter bot token: ").strip()
-            tokens = load_data(TOKEN_FILE)
-            tokens[token_name] = token
-            save_data(TOKEN_FILE, tokens)
+            clear_screen()
+            token_name = input("Enter a name for the token: ").strip()
+            token = input("Enter the bot token: ").strip()
+            data = load_data(TOKEN_FILE)
+            data[token_name] = token
+            save_data(TOKEN_FILE, data)
             print("Token saved successfully.")
+            input("\nPress Enter to return to the main menu.")
 
         elif choice == "2":
+            clear_screen()
             tokens = load_data(TOKEN_FILE)
             if tokens:
-                display_grid(tokens.keys(), "Saved Tokens")
+                print("\nSaved Tokens:")
+                for name in tokens:
+                    print(f"- {name}")
             else:
-                print("No tokens saved.")
+                print("No tokens found.")
+            input("\nPress Enter to return to the main menu.")
 
-        elif choice == "3":
-            token_name = input("Enter bot token name to use: ").strip()
-            guild_id = input("Enter guild ID: ").strip()
-            tokens = load_data(TOKEN_FILE)
-            bot_token = tokens.get(token_name)
+        elif choice in ["3", "4"]:
+            clear_screen()
+            use_saved = input("Use a saved token? (yes/no): ").strip().lower()
+            if use_saved in ["yes", "y"]:
+                tokens = load_data(TOKEN_FILE)
+                if not tokens:
+                    print("No saved tokens found. Please save one first.")
+                    input("\nPress Enter to return to the main menu.")
+                    continue
 
-            if bot_token:
-                intents = discord.Intents.default()
-                intents.members = True
-                bot = commands.Bot(command_prefix="!", intents=intents)
+                print("\nAvailable Tokens:")
+                for name in tokens:
+                    print(f"- {name}")
+                token_name = input("Enter the name of the saved token: ").strip()
+                bot_token = tokens.get(token_name)
+            else:
+                bot_token = input("Enter the bot token: ").strip()
 
-                @bot.event
-                async def on_ready():
+            guild_id = input("Enter the Guild ID: ").strip()
+
+            if not bot_token:
+                print("Invalid or missing bot token. Please try again.")
+                input("\nPress Enter to return to the main menu.")
+                continue
+
+            intents = discord.Intents.default()
+            intents.members = True
+            bot = commands.Bot(command_prefix="!", intents=intents)
+
+            @bot.event
+            async def on_ready():
+                print(f"Bot logged in as {bot.user}")
+                if choice == "3":
                     await create_roles(bot, guild_id)
-                    await bot.close()
+                elif choice == "4":
+                    await create_channels(bot, guild_id)
+                await bot.close()
 
-                try:
-                    await bot.start(bot_token)
-                except discord.LoginFailure:
-                    print("Invalid bot token.")
-            else:
-                print("Token not found.")
+            try:
+                await bot.start(bot_token)
+            except discord.LoginFailure:
+                print("Invalid bot token.")
+            input("\nPress Enter to return to the main menu.")
 
-        elif choice == "4":
+        elif choice == "5":
             print("Exiting...")
-            sys.exit(0)
+            break
 
         else:
-            print("Invalid choice. Please try again.")
+            print("Invalid choice. Try again.")
+            input("\nPress Enter to return to the main menu.")
 
 if __name__ == "__main__":
     asyncio.run(menu())
